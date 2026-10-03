@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>trae-switch-cn · Trae 账号切换</title>
+    <!--
+      首屏兜底样式：纯内联，不引用任何外部资源（离线 / 资源加载失败时同样可见）。
+      正常启动时 React 挂载会清空 #root，占位自然消失；主题跟随系统，避免深色下闪白。
+
+      样式必须只落在 .wb-boot 上，不要写 body：这段内联样式是「未分层」的，
+      而项目 CSS 走 Tailwind 的 @layer base，级联中未分层样式优先于所有分层样式。
+      写到 body 上会盖掉应用自己的 body 颜色（--foreground），系统深色 + 应用浅色时
+      所有未显式指定颜色的正文文字会继承成兜底用的近白色，看起来像文字消失。
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+      .wb-boot {
+        box-sizing: border-box;
+        display: flex;
+        min-height: 100vh;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 32px;
+        text-align: center;
+        background: #ffffff;
+        color: #18181b;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      }
+      .wb-boot-title {
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .wb-boot-text {
+        max-width: 460px;
+        font-size: 12px;
+        line-height: 1.7;
+        color: #71717a;
+      }
+      .wb-boot-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 6px;
+      }
+      .wb-boot-button {
+        padding: 7px 14px;
+        border: 0;
+        border-radius: 8px;
+        background: #18181b;
+        color: #fafafa;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .wb-boot-link {
+        font-size: 12px;
+        color: #71717a;
+      }
+      @media (prefers-color-scheme: dark) {
+        .wb-boot {
+          background: #18181b;
+          color: #fafafa;
+        }
+        .wb-boot-button {
+          background: #fafafa;
+          color: #18181b;
+        }
+        .wb-boot-text,
+        .wb-boot-link {
+          color: #a1a1aa;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="root">
+      <div class="wb-boot">
+        <div class="wb-boot-title">正在启动…</div>
+        <div class="wb-boot-text">Trae 账号切换</div>
+      </div>
+    </div>
+
+    <!--
+      入口 JS 未接管（脚本未加载 / 模块语法错误 / 首屏渲染前抛错）时的兜底：
+      10 秒后仍未置位 window.__WB_MOUNTED__ 就把占位替换为可自救的中文提示。
+      阈值 10s 宽松于正常冷启动，只有真正启动失败时才会出现。
+    -->
+    <script>
+      (function () {
+        var timeoutMs = 10000;
+        window.setTimeout(function () {
+          if (window.__WB_MOUNTED__) return;
+          var root = document.getElementById("root");
+          if (!root) return;
+
+          var wrap = document.createElement("div");
+          wrap.className = "wb-boot";
+
+          var title = document.createElement("div");
+          title.className = "wb-boot-title";
+          title.textContent = "应用启动失败";
+
+          var text = document.createElement("div");
+          text.className = "wb-boot-text";
+          text.textContent = "界面未能正常加载。可以先点「重新加载」再试一次。";
+
+          var actions = document.createElement("div");
+          actions.className = "wb-boot-actions";
+
+          var reload = document.createElement("button");
+          reload.type = "button";
+          reload.className = "wb-boot-button";
+          reload.textContent = "重新加载";
+          reload.addEventListener("click", function () {
+            window.location.reload();
+          });
+
+          actions.appendChild(reload);
+          wrap.appendChild(title);
+          wrap.appendChild(text);
+          wrap.appendChild(actions);
+
+          root.textContent = "";
+          root.appendChild(wrap);
+        }, timeoutMs);
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

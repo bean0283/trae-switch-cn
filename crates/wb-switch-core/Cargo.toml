@@ -1,0 +1,47 @@
+[package]
+name = "wb-switch-core"
+version = "0.1.72"
+edition = "2021"
+description = "trae-switch-cn 核心逻辑（账号/切换/会话/解密/导入），不依赖 Tauri，可被桌面端与 CLI 复用"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio = { version = "1", features = ["rt", "sync", "time", "macros"] }
+uuid = { version = "1", features = ["v4"] }
+dirs = "5"
+chrono = "0.4"
+# backup：会话同步前用 SQLite 在线备份 API 生成一致快照，不直接 cp 活动库。
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+# 会话关联的内容版本（归一化行摘要 / 全文摘要）。不能改用 DefaultHasher：跨进程
+# 与跨版本都不稳定，无法作为持久化内容身份。
+sha2 = "0.10"
+hmac = "0.12"
+
+# Trae 会话导出：批量打包为 zip。
+zip = "0.6"
+
+# CodeBuddy CN IDE Safe Storage (state.vscdb secret inject)
+aes = "0.8"
+cbc = "0.1"
+pbkdf2 = "0.12"
+sha1 = "0.10"
+aes-gcm = "0.10"
+base64 = "0.22"
+getrandom = "0.2"
+
+# Trae 网页登录：全机无客户端设备密钥时自建 P-256 设备身份（对齐 trae-switch 原版）。
+p256 = { version = "0.13", features = ["pkcs8", "pem", "arithmetic"] }
+
+[target.'cfg(windows)'.dependencies]
+# Win32_UI_Shell / Win32_UI_WindowsAndMessaging：ShellExecuteW 用默认浏览器打开
+# 授权 URL（explorer.exe 会误开文档管理器；cmd /c start 会拆断含 & 的 URL）。
+windows = { version = "0.58", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_System_Diagnostics_Debug", "Win32_System_Memory", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+
+# Linux 密钥环：直接按 Secret Service D-Bus 协议读 Safe Storage 密码，不依赖
+# 默认不安装的 secret-tool（issue #80）。版本与 tauri 依赖图里已有的那份一致，
+# 不引入新的下载。
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "5"
+

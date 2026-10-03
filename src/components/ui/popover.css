@@ -1,0 +1,32 @@
+/*
+ * Popover 箭头边框衔接。
+ *
+ * 箭头是旋转 45° 的方块，面板描边为 `ring-1 ring-black/5`（box-shadow）。
+ * Radix 把箭头包在一层 span 里（按朝向再旋转/平移），所以选择器必须是后代，
+ * 不能用直接子选择器。颜色由箭头上的 `border-black/5` 提供，这里只给外露的
+ * 两条边设 1px 宽度；朝内的两条边保持 0，避免边框线露在面板内部。
+ *
+ * 外露边是按 Radix 包裹层的实际变换核对过的（包裹层对 bottom 绕顶边转 180°，
+ * 因此 bottom 与 top 用同一组本地边）：
+ * - bottom / top：右边 + 下边
+ * - left：上边 + 右边
+ * - right：左边 + 下边
+ */
+[data-slot="popover-content"][data-side="bottom"] [data-slot="popover-arrow"],
+[data-slot="popover-content"][data-side="top"] [data-slot="popover-arrow"] {
+  border-style: solid;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+}
+
+[data-slot="popover-content"][data-side="left"] [data-slot="popover-arrow"] {
+  border-style: solid;
+  border-top-width: 1px;
+  border-right-width: 1px;
+}
+
+[data-slot="popover-content"][data-side="right"] [data-slot="popover-arrow"] {
+  border-style: solid;
+  border-left-width: 1px;
+  border-bottom-width: 1px;
+}
