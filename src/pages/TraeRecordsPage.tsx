@@ -6,6 +6,7 @@ import {
   Database,
   Eye,
   FileDown,
+  FolderOpen,
   Import,
   KeyRound,
   Loader2,
@@ -54,6 +55,8 @@ export default function TraeRecordsPage() {
   const [decryptProgress, setDecryptProgress] = useState<string[]>([]);
   // 归属账号筛选（会话列表）
   const [ownerFilter, setOwnerFilter] = useState("");
+  // 导出目录（默认路径提示 + 打开按钮）
+  const [exportDir, setExportDir] = useState("");
 
   // 会话详情 / 删除 对话框
   const [detail, setDetail] = useState<TraeSessionDetail | null>(null);
@@ -148,6 +151,10 @@ export default function TraeRecordsPage() {
 
   useEffect(() => {
     void loadClients();
+    api
+      .traeExportDir()
+      .then(setExportDir)
+      .catch(() => setExportDir(""));
   }, []);
 
   async function refresh(key: string) {
@@ -232,6 +239,7 @@ export default function TraeRecordsPage() {
         const res = await api.traeExportAll([clientKey]);
         toast.success(`已导出 ${res.ok}/${res.total} 个会话`, {
           description: res.filename,
+          action: { label: "打开所在目录", onClick: () => void api.traeRevealPath(res.path) },
         });
       } catch (cause) {
         toast.error("批量导出失败", { description: api.asError(cause) });
@@ -244,7 +252,10 @@ export default function TraeRecordsPage() {
     await runBusy("导出 MD", async () => {
       try {
         const res = await api.traeExportSession(clientKey, s.id);
-        toast.success("已导出会话", { description: `${res.filename}（${res.size_kb} KB）` });
+        toast.success("已导出会话", {
+          description: `${res.filename}（${res.size_kb} KB）\n${res.path}`,
+          action: { label: "打开所在目录", onClick: () => void api.traeRevealPath(res.path) },
+        });
       } catch (cause) {
         toast.error("导出失败", { description: api.asError(cause) });
       }
@@ -328,6 +339,24 @@ export default function TraeRecordsPage() {
           </Button>
         </div>
       </div>
+
+      {/* 导出目录提示（默认路径 + 打开按钮） */}
+      {exportDir ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <span>
+            导出目录：
+            <code className="ml-1 font-mono">{exportDir}</code>
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 gap-1 px-2 text-xs"
+            onClick={() => void api.traeRevealPath(exportDir)}
+          >
+            <FolderOpen className="size-3.5" />打开
+          </Button>
+        </div>
+      ) : null}
 
       {/* 客户端选择 */}
       {clients.length > 0 ? (

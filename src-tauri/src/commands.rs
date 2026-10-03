@@ -98,6 +98,38 @@ pub fn reveal_error_log(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|error| format!("打开日志位置失败: {error}"))
 }
 
+/// 在文件管理器中定位任意文件/目录（导出文件、解密库等通用）。目录不存在时逐级回退。
+#[tauri::command]
+pub fn reveal_path(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+
+    let p = std::path::PathBuf::from(&path);
+    let target = if p.exists() {
+        p
+    } else {
+        match p.parent() {
+            Some(dir) => {
+                let _ = std::fs::create_dir_all(dir);
+                if dir.exists() {
+                    dir.to_path_buf()
+                } else {
+                    return Err(format!("路径不存在：{path}"));
+                }
+            }
+            None => return Err(format!("路径不存在：{path}")),
+        }
+    };
+    app.opener()
+        .reveal_item_in_dir(target)
+        .map_err(|error| format!("打开路径失败: {error}"))
+}
+
+/// 导出目录绝对路径（前端提示 / 打开用）。
+#[tauri::command]
+pub fn trae_export_dir() -> String {
+    trae_export::export_dir().to_string_lossy().into_owned()
+}
+
 // ---------------------------------------------------------------------------
 // Trae 模块：客户端发现 / 账号库 / 切换 / 解密 / 导出 / 删除 / 交接记忆
 // ---------------------------------------------------------------------------

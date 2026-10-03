@@ -185,6 +185,16 @@ export function traeExportAll(sources: string[]): Promise<TraeExportAllReport> {
   return call("trae_export_all", { sources });
 }
 
+/** 导出目录绝对路径（提示 / 打开用）。 */
+export function traeExportDir(): Promise<string> {
+  return call("trae_export_dir", {});
+}
+
+/** 在文件管理器中定位文件/目录。 */
+export function traeRevealPath(path: string): Promise<void> {
+  return call("reveal_path", { path });
+}
+
 /** 删除预览：标题 / 各表行数 / 磁盘文件（只读，不删任何东西）。 */
 export function traeDeleteInfo(clientKey: string, sessionId: string): Promise<TraeDeleteInfo> {
   return call("trae_delete_info", { clientKey, sessionId });

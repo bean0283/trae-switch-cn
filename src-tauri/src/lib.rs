@@ -71,6 +71,8 @@ pub fn run() {
             commands::log_error,
             commands::get_error_log_path,
             commands::reveal_error_log,
+            commands::reveal_path,
+            commands::trae_export_dir,
             commands::trae_list_clients,
             commands::trae_account_overview,
             commands::trae_refresh_profile,

@@ -78,6 +78,18 @@ pub fn safe_filename(name: &str) -> String {
     }
 }
 
+/// 按字节上限安全截断：不切断多字节 UTF-8 字符，避免 `&s[..n]` 的 char 边界 panic。
+pub fn truncate_utf8(s: &str, max_bytes: usize) -> String {
+    if s.len() <= max_bytes {
+        return s.to_string();
+    }
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    s[..end].to_string()
+}
+
 /// 打开解密库（明文 SQLite）。不存在返回错误。
 pub(crate) fn open_decrypted(client_key: &str) -> Result<Connection, String> {
     let path = decrypted_db_path(client_key);
@@ -353,7 +365,7 @@ fn render_trae_tool(name: &str, params: &Value) -> String {
         _ => {
             let s = serde_json::to_string(params).unwrap_or_else(|_| format!("{params}"));
             let s = if s.len() > 1500 {
-                format!("{} ...(截断)", &s[..1500])
+                format!("{} ...(截断)", truncate_utf8(&s, 1500))
             } else {
                 s
             };
