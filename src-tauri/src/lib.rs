@@ -1,8 +1,37 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use tauri::Manager;
+use tauri::{Manager, WindowEvent};
 mod commands;
 #[cfg(target_os = "macos")]
 mod instance_lock;
+
+/// 右下角托盘：关闭窗口时隐藏到托盘（不退出），托盘菜单可恢复 / 真正退出。
+fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem};
+    use tauri::tray::TrayIconBuilder;
+
+    let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show, &quit])?;
+    let tray = TrayIconBuilder::new()
+        .icon(app.default_window_icon().expect("缺省窗口图标").clone())
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.unminimize();
+                    let _ = w.set_focus();
+                }
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .build(app)?;
+    // 保持托盘存活：TrayIcon 被 drop 会从系统托盘消失
+    app.manage(tray);
+    Ok(())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -24,10 +53,18 @@ pub fn run() {
     builder = builder.plugin(tauri_plugin_opener::init());
 
     let app = builder
-        .setup(|_app| {
+        .setup(|app| {
             #[cfg(target_os = "macos")]
-            instance_lock::acquire_or_exit(_app.handle());
+            instance_lock::acquire_or_exit(app.handle());
+            build_tray(app.handle())?;
             Ok(())
+        })
+        // 点窗口关闭按钮：隐藏到托盘，不退出程序
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::relaunch_app,

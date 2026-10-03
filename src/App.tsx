@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, NavLink, Outlet, Route, Routes } from "react-router-dom";
 import { Repeat2, ScrollText } from "lucide-react";
+import { getVersion } from "@tauri-apps/api/app";
 
 import { cn } from "@/lib/utils";
 import TraeSwitchPage from "@/pages/TraeSwitchPage";
@@ -9,8 +11,15 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 function Layout() {
+  const [version, setVersion] = useState("");
   const hasUnifiedTitleBar =
     typeof navigator !== "undefined" && navigator.userAgent.includes("Macintosh");
+
+  useEffect(() => {
+    getVersion()
+      .then(setVersion)
+      .catch(() => setVersion(""));
+  }, []);
 
   return (
     <div className="flex h-screen min-h-0 overflow-hidden bg-background">
@@ -72,6 +81,9 @@ function Layout() {
             Trae 会话记录
           </NavLink>
         </nav>
+        <div className="mt-auto select-none px-1 pt-3 text-xs text-sidebar-foreground/40">
+          trae-switch-cn v{version || "0.0.3"}
+        </div>
       </aside>
       <main
         className={cn(

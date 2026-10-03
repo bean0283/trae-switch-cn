@@ -25,7 +25,7 @@ use crate::modules::trae_export::{backup_dir, deleted_sessions_dir, is_session_i
 use crate::modules::trae_import::{encrypt_db_file, patch_reserved_field, session_owner_uid};
 use crate::modules::trae_memory_scan::{load_saved_key, save_key, scan_for_key};
 use crate::modules::trae_remote::has_cloud_credential;
-use crate::modules::trae_switch::{is_running, kill_all, wait_until_stopped};
+use crate::modules::trae_switch::{is_running, kill_all, launch, wait_until_stopped};
 use crate::modules::trae_vault::account_label;
 
 const PAGE_SZ: usize = 4096;
@@ -547,6 +547,18 @@ pub fn delete_session(
         }
     }
 
+    // 8. 删除期间结束过客户端进程，成功后自动重启，保证删除结果立即可见
+    let relaunched = match launch(client_key, None) {
+        Ok(_) => {
+            log("删除成功，已自动重启客户端");
+            true
+        }
+        Err(e) => {
+            log(&format!("删除成功，但自动重启客户端失败：{e}"));
+            false
+        }
+    };
+
     cleanup(&work);
     log("删除完成");
     Ok(json!({
@@ -556,11 +568,12 @@ pub fn delete_session(
         "source": label_of(client_key),
         "deleted_rows": deleted_rows,
         "wal_merged": wal_merged,
+        "relaunched": relaunched,
         "moved_files": moved.iter().filter(|m| !m.contains("移动失败")).count(),
         "moved_detail": moved,
         "backup": backup_paths,
         "trash_dir": trash_dir,
-        "hint": "若 Trae 正在运行，其界面列表可能要重启 Trae 后才消失",
+        "hint": if relaunched { "已自动重启客户端，列表应为最新状态" } else { "客户端未自动重启，可手动启动" },
     }))
 }
 

@@ -1093,7 +1093,8 @@ pub fn list_account_candidates(src_client_key: &str, owner_uid: Option<&str>) ->
                 continue;
             }
             let kind = read_meta(&ck, &id).map(|m| m.kind).unwrap_or_else(|| "carrier".into());
-            let display = oauth_display(&ck, &id);
+            // 与账号库首页一致：优先 profile 昵称（GetUserInfo）→ 载体 storage.json 用户名 → oauth displayName
+            let display = crate::modules::trae_vault::display_name(&ck, &id).or_else(|| oauth_display(&ck, &id));
             let label = match &display {
                 Some(d) => format!("{d}（uid …{}）", uid_suffix(&uid)),
                 None => format!("{}（uid …{}）", id, uid_suffix(&uid)),

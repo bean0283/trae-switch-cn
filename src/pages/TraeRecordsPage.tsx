@@ -154,14 +154,22 @@ export default function TraeRecordsPage() {
     setLoading(true);
     setError(null);
     try {
-      const st = await api.traeDecryptedStatus(key);
-      setStatus(st);
+      // 有已存密钥时先重新解密（含 WAL 合并），保证列表反映 Trae 最新增删；
+      // Trae 运行中手动删除的任务、新建的会话无需重启 Trae 即可同步。
+      let st = await api.traeDecryptedStatus(key);
       if (st.exists) {
+        try {
+          const res = await api.traeDecryptWithSavedKey(key);
+          st = { ...st, tables: res.report.tables };
+        } catch {
+          // 无已存密钥或密钥过期：沿用现有明文快照
+        }
         const { sessions } = await api.traeListSessions(key);
         setSessions(sessions);
       } else {
         setSessions(null);
       }
+      setStatus(st);
     } catch (cause) {
       setError(api.asError(cause));
     } finally {
@@ -274,13 +282,14 @@ export default function TraeRecordsPage() {
       const res = await api.traeDeleteSession(clientKey, deleteTarget.id);
       setDeleteProgress((res.progress ?? []).map((l) => String(l)));
       const cloud = res.cloud as TraeCloudDeleteInfo | undefined;
+      const relaunched = res.relaunched ? " · 已自动重启客户端" : " · 客户端未自动重启";
       if (cloud?.attempted && cloud.ok === false) {
         toast.warning(`已删除本地会话「${deleteTarget.title}」`, {
-          description: `云端任务列表删除失败（不影响本地结果）：${cloud.error ?? "未知原因"}`,
+          description: `云端任务列表删除失败（不影响本地结果）：${cloud.error ?? "未知原因"}${relaunched}`,
         });
       } else {
         toast.success(`已彻底删除会话「${deleteTarget.title}」`, {
-          description: "实时库与解密库已同步删除，文件已移入回收站目录（可恢复）。",
+          description: `实时库与解密库已同步删除，文件已移入回收站目录（可恢复）。${relaunched}`,
         });
       }
       setDeleteTarget(null);

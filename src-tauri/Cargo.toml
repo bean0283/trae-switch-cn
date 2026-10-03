@@ -26,7 +26,7 @@ custom-protocol = ["tauri/custom-protocol"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["macos-private-api"] }
+tauri = { version = "2", features = ["macos-private-api", "tray-icon"] }
 tauri-plugin-opener = "2"
 wb-switch-core = { path = "../crates/wb-switch-core" }
 serde = { version = "1", features = ["derive"] }
