@@ -36,6 +36,7 @@ pub fn run() {
             commands::reveal_error_log,
             commands::trae_list_clients,
             commands::trae_account_overview,
+            commands::trae_refresh_profile,
             commands::trae_identify_live,
             commands::trae_backup_account,
             commands::trae_switch_to,

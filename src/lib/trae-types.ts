@@ -54,6 +54,26 @@ export interface TraeOAuthAccount {
   updatedAt?: string;
 }
 
+/** 账号资料（GetUserInfo 昵称 / 手机号 + 积分余额，缓存于 profile.json）。 */
+export interface TraeAccountProfile {
+  /** 真实昵称（GetUserInfo ScreenName，与 Trae 界面一致）。 */
+  screen_name?: string | null;
+  user_id?: string | null;
+  /** 脱敏手机号。 */
+  mobile?: string | null;
+  /** 剩余积分（user_current_entitlement_list 计算）。 */
+  credits?: number | null;
+  host?: string;
+  fetched_at?: string;
+}
+
+/** 手动刷新账号资料的结果。 */
+export interface TraeProfileRefreshResult {
+  id: string;
+  profile: TraeAccountProfile;
+  displayName?: string | null;
+}
+
 export interface TraeVaultEntry {
   id: string;
   meta: TraeVaultMeta | null;
@@ -61,8 +81,10 @@ export interface TraeVaultEntry {
   kind?: "carrier" | "oauth";
   /** kind=oauth 时的凭证详情。 */
   oauth?: TraeOAuthAccount | null;
-  /** 自动获取的真实账号名（oauth displayName / 载体 storage.json username）。 */
+  /** 自动获取的真实账号名（接口昵称 / oauth displayName / 载体 storage.json username）。 */
   displayName?: string | null;
+  /** 接口拉取的账号资料（昵称 / 积分），网络失败时为空。 */
+  profile?: TraeAccountProfile | null;
 }
 
 export interface TraeLiveAccount {
@@ -221,6 +243,8 @@ export interface TraeImportReport {
   target_label: string;
   pages: number;
   verified_sessions: number;
+  /** 导入后是否已自动重启目标客户端。 */
+  relaunched?: boolean;
   backup_dir: string;
 }
 

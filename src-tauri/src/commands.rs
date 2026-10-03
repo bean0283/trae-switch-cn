@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use tauri::Emitter;
 use wb_switch_core::modules::{
     error_log, trae_decrypt, trae_delete, trae_discover, trae_export, trae_handoff, trae_import,
-    trae_memory_scan, trae_oauth, trae_remote, trae_switch, trae_vault,
+    trae_memory_scan, trae_oauth, trae_profile, trae_remote, trae_switch, trae_vault,
 };
 
 // ---------------------------------------------------------------------------
@@ -109,6 +109,8 @@ pub fn trae_list_clients() -> Value {
 }
 
 /// Trae 账号总览：当前登录态（describe_account）+ 账号库已建档列表。
+/// 资料（昵称 / 积分）只读缓存，不自动访问接口（避免风控）；
+/// 登录成功由后端拉取一次，之后仅能通过 trae_refresh_profile 手动刷新。
 #[tauri::command]
 pub async fn trae_account_overview(client_key: String) -> Result<Value, String> {
     if trae_discover::get_client(&client_key).is_none() {
@@ -130,7 +132,14 @@ pub async fn trae_account_overview(client_key: String) -> Result<Value, String> 
                 } else {
                     None
                 };
-                json!({ "id": id, "meta": meta, "kind": kind, "oauth": oauth, "displayName": trae_vault::display_name(&client_key, id) })
+                json!({
+                    "id": id,
+                    "meta": meta,
+                    "kind": kind,
+                    "oauth": oauth,
+                    "displayName": trae_vault::display_name(&client_key, id),
+                    "profile": trae_vault::read_profile(&client_key, id),
+                })
             })
             .collect();
         Ok(json!({
@@ -143,6 +152,24 @@ pub async fn trae_account_overview(client_key: String) -> Result<Value, String> 
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// 手动刷新单个账号资料（GetUserInfo 真实昵称 + 积分余额），写入 profile.json 缓存。
+/// 仅在用户点击「刷新积分」时调用，避免频繁自动访问接口触发风控。
+#[tauri::command]
+pub async fn trae_refresh_profile(client_key: String, account_id: String) -> Result<Value, String> {
+    let oauth = trae_oauth::read_oauth_account(&client_key, &account_id)
+        .ok_or("该账号不是网页凭证账号，或凭证已缺失（无 oauth.json）")?;
+    let profile = trae_profile::refresh_profile(&client_key, &account_id, &oauth)
+        .await
+        .ok_or("刷新失败：接口不可用或凭证已失效（可能已退出登录）")?;
+    let display_name = profile
+        .get("screen_name")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .or_else(|| trae_vault::display_name(&client_key, &account_id));
+    Ok(json!({ "id": account_id, "profile": profile, "displayName": display_name }))
 }
 
 /// 识别当前登录账号（写入账号库前调用，拿 uid 做归属）。
@@ -304,9 +331,14 @@ pub async fn trae_scan_and_decrypt(client_key: String) -> Result<Value, String> 
             let p = progress.lock().unwrap().join("\n");
             format!("{e}\n{p}")
         })?;
+        // Trae 运行中时新增/删除的会话在 WAL 里，合并最后一笔已提交事务的帧，
+        // 否则解密快照停留在上次 checkpoint，扫描后列表不刷新（需重启 Trae 才看到变化）。
+        let wal = std::path::PathBuf::from(format!("{}-wal", db.display()));
+        let merged_wal = trae_delete::merge_wal_into_plain(&out, &wal, &key).unwrap_or(0);
         Ok(json!({
             "scan": scan,
             "report": report,
+            "mergedWALFrames": merged_wal,
             "decryptedDb": out.to_string_lossy().into_owned(),
             "progress": progress.into_inner().unwrap_or_default(),
         }))
@@ -325,7 +357,9 @@ pub async fn trae_decrypt_with_saved_key(client_key: String) -> Result<Value, St
         let out = trae_export::decrypted_db_path(&client_key);
         let report = trae_decrypt::decrypt_database(&db, &key, &out, None)
             .map_err(|e| format!("{e}"))?;
-        Ok(json!({ "report": report, "decryptedDb": out.to_string_lossy().into_owned() }))
+        let wal = std::path::PathBuf::from(format!("{}-wal", db.display()));
+        let merged_wal = trae_delete::merge_wal_into_plain(&out, &wal, &key).unwrap_or(0);
+        Ok(json!({ "report": report, "mergedWALFrames": merged_wal, "decryptedDb": out.to_string_lossy().into_owned() }))
     })
     .await
     .map_err(|e| e.to_string())?

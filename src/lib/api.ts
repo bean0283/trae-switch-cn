@@ -17,6 +17,7 @@ import type {
   TraeOAuthPending,
   TraeOAuthSessionStatus,
   TraeOAuthStartResult,
+  TraeProfileRefreshResult,
   TraeScanResult,
   TraeSessionDetail,
   TraeSessionInfo,
@@ -59,6 +60,14 @@ export function traeListClients(): Promise<{ clients: TraeInstalledClient[] }> {
 /** Trae 账号总览：当前登录态 + 账号库已建档列表。 */
 export function traeAccountOverview(clientKey: string): Promise<TraeAccountOverview> {
   return call("trae_account_overview", { clientKey });
+}
+
+/** 手动刷新单个账号资料（GetUserInfo 真实昵称 + 积分余额），仅在按钮点击时调用。 */
+export function traeRefreshProfile(
+  clientKey: string,
+  accountId: string,
+): Promise<TraeProfileRefreshResult> {
+  return call("trae_refresh_profile", { clientKey, accountId });
 }
 
 /** 识别当前登录账号（写入账号库前调用，拿 uid 做归属）。 */

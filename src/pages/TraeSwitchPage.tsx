@@ -12,6 +12,7 @@ import {
   LogIn,
   PencilLine,
   Power,
+  RefreshCw,
   RotateCcw,
   Save,
   Trash2,
@@ -364,6 +365,31 @@ export default function TraeSwitchPage() {
       await loadOverview(clientKey);
     } catch (cause) {
       toast.error("回滚失败", { description: api.asError(cause) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRefreshProfile(id: string) {
+    if (!clientKey || busy) return;
+    setBusy(true);
+    try {
+      const r = await api.traeRefreshProfile(clientKey, id);
+      setOverview((prev) => {
+        if (!prev) return prev;
+        const vault = prev.vault.map((v) =>
+          v.id === r.id
+            ? { ...v, profile: r.profile, displayName: r.displayName ?? v.displayName }
+            : v,
+        );
+        return { ...prev, vault };
+      });
+      const credits = r.profile?.credits;
+      toast.success("账号资料已刷新", {
+        description: `${r.displayName ?? id} · 积分余额：${credits != null ? credits : "未知"}`,
+      });
+    } catch (cause) {
+      toast.error("刷新失败", { description: api.asError(cause) });
     } finally {
       setBusy(false);
     }
@@ -765,6 +791,12 @@ export default function TraeSwitchPage() {
                             {isOauth ? (
                               <>
                                 {oa?.uid ? <span>uid：{oa.uid}</span> : null}
+                                {entry.profile?.credits != null ? (
+                                  <span className="font-medium text-amber-600 dark:text-amber-400">
+                                    积分余额：{entry.profile.credits}
+                                  </span>
+                                ) : null}
+                                {entry.profile?.mobile ? <span>手机：{entry.profile.mobile}</span> : null}
                                 {oa?.expiredAt ? (
                                   <span>令牌到期：{new Date(oa.expiredAt).toLocaleString("zh-CN")}</span>
                                 ) : null}
@@ -799,6 +831,17 @@ export default function TraeSwitchPage() {
                           >
                             <Power className="size-4" />切换
                           </Button>
+                          {isOauth ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={busy}
+                              onClick={() => void onRefreshProfile(entry.id)}
+                              title="手动刷新账号资料（真实昵称 / 积分余额）。为避免风控，仅在登录成功时自动拉取一次，之后需手动刷新"
+                            >
+                              <RefreshCw className="size-4" />积分
+                            </Button>
+                          ) : null}
                           <Button
                             size="sm"
                             variant="ghost"

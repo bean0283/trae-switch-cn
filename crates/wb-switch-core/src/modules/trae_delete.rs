@@ -101,7 +101,9 @@ fn wal_checksum_run(data: &[u8], magic: u32, mut s0: u32, mut s1: u32) -> (u32, 
 /// WAL 缺失 / 头部无效 / 页大小不符 / 无有效提交帧时静默跳过，返回 Ok(0)。
 /// 帧有效性按 SQLite 规则判定：盐与头部一致 + 连续校验和一致；
 /// 截断/损坏处即停止，最后提交帧之后的帧属未提交事务，一并忽略。
-fn merge_wal_into_plain(plain: &Path, wal: &Path, enc_key_hex: &str) -> Result<usize, String> {
+/// 供解密扫描 / 删除流程共用：Trae 运行中新增/删除的会话在 WAL 里，
+/// 不合并则解密快照停留在上次 checkpoint，列表看不到最新变化。
+pub fn merge_wal_into_plain(plain: &Path, wal: &Path, enc_key_hex: &str) -> Result<usize, String> {
     let wal_data = match std::fs::read(wal) {
         Ok(d) => d,
         Err(_) => return Ok(0),

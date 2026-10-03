@@ -10,6 +10,7 @@ pub mod trae_km;
 pub mod trae_memory_scan;
 pub mod trae_oauth;
 pub mod trae_import;
+pub mod trae_profile;
 pub mod trae_remote;
 pub mod trae_switch;
 pub mod trae_synth;

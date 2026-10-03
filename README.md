@@ -23,7 +23,7 @@ Trae（国内版）多账号切换桌面 App（Tauri 2 + React + Rust）。面�
 
 ### 1. 安装
 
-从 [Releases](https://github.com/bean0283/trae-switch-cn/releases) 下载 `trae-switch-cn_0.0.2_x64-setup.exe`（NSIS 版，推荐）或 MSI 版，双击安装后从开始菜单 / 桌面快捷方式启动。
+从 [Releases](https://github.com/bean0283/trae-switch-cn/releases) 下载 `trae-switch-cn_0.0.3_x64-setup.exe`（NSIS 版，推荐）或 MSI 版，双击安装后从开始菜单 / 桌面快捷方式启动。
 
 ### 2. 账号管理
 

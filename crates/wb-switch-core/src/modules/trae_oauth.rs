@@ -1485,6 +1485,13 @@ pub async fn complete_login_from_callback(callback_url: &str, override_key: Opti
     }
     clear_pending();
     oauth_log(&format!("RESULT OK duplicate={} twin={} msg={message}", saved.duplicate, saved.carrier_twin.as_deref().unwrap_or("-")));
+
+    // 登录成功仅此处拉取一次账号资料（GetUserInfo 真实昵称 + 积分余额）：
+    // 之后不再自动访问接口，避免风控，仅能由前端「刷新积分」按钮手动触发。
+    if let Some(oauth) = read_oauth_account(&client_key, &saved.id) {
+        let _ = crate::modules::trae_profile::refresh_profile(&client_key, &saved.id, &oauth).await;
+    }
+
     json!({
         "state": "done",
         "ok": true,

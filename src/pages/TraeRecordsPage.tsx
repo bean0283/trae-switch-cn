@@ -125,7 +125,7 @@ export default function TraeRecordsPage() {
       const res = await api.traeImportRun(clientKey, importDst.split("::")[0], importUid, [importTarget.id]);
       setImportReport(res);
       toast.success(`已导入「${importTarget.title || "（无标题）"}」`, {
-        description: `目标：${res.target_label} · 复制 ${res.copied_rows} 行 · 校验会话 ${res.verified_sessions} 个`,
+        description: `目标：${res.target_label} · 复制 ${res.copied_rows} 行 · 校验会话 ${res.verified_sessions} 个 · ${res.relaunched ? "已自动重启客户端" : "客户端未自动重启"}`,
       });
     } catch (cause) {
       toast.error("导入失败", { description: api.asError(cause) });

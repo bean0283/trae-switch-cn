@@ -30,7 +30,7 @@ use crate::modules::trae_discover::{database_path, get_client, list_installed_cl
 use crate::modules::trae_export::{decrypted_db_path, open_decrypted};
 use crate::modules::trae_km::aes_cbc_encrypt;
 use crate::modules::trae_memory_scan::{load_saved_key, save_key, scan_for_key};
-use crate::modules::trae_switch::{is_running, kill_all, wait_until_stopped};
+use crate::modules::trae_switch::{is_running, kill_all, launch, wait_until_stopped};
 use crate::modules::trae_vault::{list_vault_accounts, read_meta, uid_of_account, uid_from_storage_text};
 use aes::Aes256;
 
@@ -968,28 +968,6 @@ fn storage_uid_of(client_key: &str) -> Option<String> {
     uid_from_storage_text(&std::fs::read_to_string(path).ok()?)
 }
 
-/// 推断源账号 uid：解密库 project 表出现最多的 user_id。
-pub fn source_uid(client_key: &str) -> Option<String> {
-    let db = decrypted_db_path(client_key);
-    if !db.is_file() {
-        return None;
-    }
-    let conn = Connection::open(&db).ok()?;
-    let v: rusqlite::types::Value = conn
-        .query_row(
-            "SELECT user_id FROM project WHERE user_id IS NOT NULL AND user_id != '' \
-             GROUP BY user_id ORDER BY count(*) DESC LIMIT 1",
-            [],
-            |r| r.get(0),
-        )
-        .ok()?;
-    match v {
-        rusqlite::types::Value::Text(s) => Some(s),
-        rusqlite::types::Value::Integer(i) => Some(i.to_string()),
-        _ => None,
-    }
-}
-
 fn uid_suffix(uid: &str) -> String {
     uid[uid.len().saturating_sub(6)..].to_string()
 }
@@ -1253,17 +1231,6 @@ pub fn import_sessions(
         }
     };
 
-    // 同客户端跨账号：必须给出目标 uid，且不能是源账号自身
-    if same_db {
-        let uid = dst_uid.ok_or("同客户端导入必须指定目标账号 uid")?;
-        if let Some(src_uid) = source_uid(src_client_key) {
-            if src_uid == uid {
-                return Err("目标账号就是源账号，无需导入".into());
-            }
-        }
-        log(&format!("同客户端（{}）跨账号复制：源记录保留，会话归属改写为目标账号", dst_client.label));
-    }
-
     // 0) 源库必须是已解密状态
     let src_db = decrypted_db_path(src_client_key);
     if !src_db.is_file() {
@@ -1273,6 +1240,28 @@ pub fn import_sessions(
         ));
     }
     let src_conn = open_decrypted(src_client_key)?;
+
+    // 同客户端跨账号：必须给出目标 uid。源账号按「所选会话的归属账号」判定
+    // （而非解密库中出现最多的账号），已属于目标账号的会话直接跳过。
+    let session_ids: Vec<String> = if same_db {
+        let uid = dst_uid.ok_or("同客户端导入必须指定目标账号 uid")?;
+        let mut kept: Vec<String> = Vec::new();
+        for sid in session_ids {
+            match session_owner_uid(src_client_key, sid) {
+                Some(o) if o == uid => {
+                    log(&format!("会话 {sid} 已属于目标账号（uid …{}），跳过（无需复制）", uid_suffix(&uid)));
+                }
+                _ => kept.push(sid.clone()),
+            }
+        }
+        if kept.is_empty() {
+            return Err("目标账号就是源账号（所选会话均已属于该账号），无需导入".into());
+        }
+        log(&format!("同客户端（{}）跨账号复制：源记录保留，会话归属改写为目标账号", dst_client.label));
+        kept
+    } else {
+        session_ids.to_vec()
+    };
 
     // 1) 目标库与密钥
     let dst_db = database_path(&dst_client);
@@ -1338,8 +1327,8 @@ pub fn import_sessions(
     };
     let mut copied = 0usize;
     let mut skipped: Vec<String> = Vec::new();
-    for sid in session_ids {
-        match copy_session(&src_conn, &dst_conn, sid, &opts, Some(&log)) {
+    for sid in &session_ids {
+        match copy_session(&src_conn, &dst_conn, sid.as_str(), &opts, Some(&log)) {
             Ok(Some((n, _))) => copied += n,
             Ok(None) => skipped.push(sid.clone()),
             Err(e) => return Err(format!("复制会话 {sid} 失败：{e}")),
@@ -1412,6 +1401,18 @@ pub fn import_sessions(
         )
         .map_err(|e| format!("源会话统计失败: {e}"))?;
 
+    // 7) 导入期间结束过目标客户端进程，成功后自动重启，保证导入的会话立即可用
+    let relaunched = match launch(dst_client_key, None) {
+        Ok(_) => {
+            log("导入成功，已自动重启目标客户端");
+            true
+        }
+        Err(e) => {
+            log(&format!("导入成功，但自动重启目标客户端失败：{e}"));
+            false
+        }
+    };
+
     Ok(json!({
         "copied_rows": copied,
         "sessions_requested": session_ids.len(),
@@ -1423,6 +1424,7 @@ pub fn import_sessions(
         "same_db": same_db,
         "pages": pages,
         "verified_sessions": verified,
+        "relaunched": relaunched,
         "backup_dir": backup_dir.to_string_lossy(),
     }))
 }

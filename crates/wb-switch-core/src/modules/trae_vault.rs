@@ -86,15 +86,51 @@ pub fn uid_of_account(client_key: &str, id: &str) -> Option<String> {
     None
 }
 
-/// 账号真实显示名：优先 oauth.json 的 displayName / userName，
-/// 其次从载体 storage.json 解密登录态取 account.username（本地备份账号也能显示真实用户名）。
-/// 取不到返回 None（前端回退到账号 id）。
+/// 从载体 storage.json 解密登录态取 Trae 客户端显示的真实用户名（如「用户1181093986」）。
+fn username_from_storage(dir: &Path) -> Option<String> {
+    let storage_text = std::fs::read_to_string(dir.join(REL_STORAGE)).ok()?;
+    let root: Value = serde_json::from_str(&storage_text).ok()?;
+    let raw = root.get(KEY_AUTH)?.as_str()?;
+    if !is_km_value(raw) {
+        return None;
+    }
+    let auth = decrypt_km_json(raw)?;
+    auth.get("account")?
+        .get("username")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+}
+
+/// 读取缓存的账号资料（GetUserInfo 昵称 + 积分余额，由 trae_profile::refresh_profile 写入）。
+pub fn read_profile(client_key: &str, id: &str) -> Option<Value> {
+    let text = std::fs::read_to_string(account_dir(client_key, id).join("profile.json")).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+/// 账号真实显示名：优先接口拉取并缓存的真实昵称（GetUserInfo ScreenName，与 Trae
+/// 界面一致），其次 Trae 客户端登录态里的真实用户名（storage.json 的 account.username），
+/// 再其次 oauth.json 的 userName / displayName。取不到返回 None。
 pub fn display_name(client_key: &str, id: &str) -> Option<String> {
+    if let Some(p) = read_profile(client_key, id) {
+        if let Some(s) = p
+            .get("screen_name")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            return Some(s.to_string());
+        }
+    }
     let dir = account_dir(client_key, id);
+    if let Some(u) = username_from_storage(&dir) {
+        return Some(u);
+    }
     let oauth = dir.join("oauth.json");
     if let Ok(text) = std::fs::read_to_string(&oauth) {
         if let Ok(v) = serde_json::from_str::<Value>(&text) {
-            for k in ["displayName", "userName"] {
+            for k in ["userName", "displayName"] {
                 if let Some(s) = v
                     .get(k)
                     .and_then(|x| x.as_str())
@@ -106,19 +142,7 @@ pub fn display_name(client_key: &str, id: &str) -> Option<String> {
             }
         }
     }
-    let storage_text = std::fs::read_to_string(dir.join(REL_STORAGE)).ok()?;
-    let root: Value = serde_json::from_str(&storage_text).ok()?;
-    let raw = root.get(KEY_AUTH)?.as_str()?;
-    if !crate::modules::trae_km::is_km_value(raw) {
-        return None;
-    }
-    let auth = crate::modules::trae_km::decrypt_km_json(raw)?;
-    auth.get("account")?
-        .get("username")
-        .and_then(|v| v.as_str())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(String::from)
+    None
 }
 
 /// 列出某客户端下已有的账号目录。
@@ -138,28 +162,13 @@ fn uid_suffix(uid: &str) -> String {
     uid[uid.len().saturating_sub(6)..].to_string()
 }
 
-/// 账号显示名：优先 oauth.json 的 displayName / userName，
+/// 账号显示名：优先真实用户名（storage.json / oauth.json，与 display_name 同优先级），
 /// 其次 vault 账号目录名，兜底仅 uid 尾号。找不到档案时同样兜底 uid 尾号。
 pub fn account_label(client_key: &str, uid: &str) -> String {
     for id in list_vault_accounts(client_key) {
         if uid_of_account(client_key, &id).as_deref() == Some(uid) {
-            let p = account_dir(client_key, &id).join("oauth.json");
-            if let Ok(text) = std::fs::read_to_string(&p) {
-                if let Ok(v) = serde_json::from_str::<Value>(&text) {
-                    for k in ["displayName", "userName"] {
-                        if let Some(s) = v
-                            .get(k)
-                            .and_then(|x| x.as_str())
-                            .map(str::trim)
-                            .filter(|s| !s.is_empty())
-                        {
-                            return format!("{s}（uid …{}）", uid_suffix(uid));
-                        }
-                    }
-                    return format!("{id}（uid …{}）", uid_suffix(uid));
-                }
-            }
-            return format!("{id}（uid …{}）", uid_suffix(uid));
+            let label = display_name(client_key, &id).unwrap_or_else(|| id.clone());
+            return format!("{label}（uid …{}）", uid_suffix(uid));
         }
     }
     format!("uid …{}", uid_suffix(uid))
