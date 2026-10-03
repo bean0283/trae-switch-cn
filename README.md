@@ -6,7 +6,9 @@ Trae（国内版）多账号切换桌面 App（Tauri 2 + React + Rust）。面�
   <img src="public/icon-transparent.png" alt="trae-switch-cn 图标" width="128" />
 </p>
 
-多账号共享登录态，一键切换 Trae 登录账号。会话记录支持从加密本地库解密查看，并按账号维度跨客户端导入 / 删除。
+## 开发背景
+
+[workbuddy-switch](https://github.com/changexbc/workbuddy-switch) 为 CodeBuddy 实现了多账号切换并保留会话记录的能力；而 Trae 一直缺少同类工具——多账号只能反复退出重登，会话记录也随账号切换而不可见。本项目沿袭这一思路，为 Trae（国内版）补齐「账号切换 + 会话记录保留」的能力：本地会话库加密解密、按账号维度导入 / 导出 / 删除，让多账号与记录不再互斥。
 
 ## 功能
 
@@ -21,7 +23,7 @@ Trae（国内版）多账号切换桌面 App（Tauri 2 + React + Rust）。面�
 
 ### 1. 安装
 
-从 [Releases](https://github.com/traeswitch-cn/trae-switch-cn/releases) 下载 `trae-switch-cn_0.0.1_x64-setup.exe`（NSIS 版，推荐）或 MSI 版，双击安装后从开始菜单 / 桌面快捷方式启动。
+从 [Releases](https://github.com/bean0283/trae-switch-cn/releases) 下载 `trae-switch-cn_0.0.1_x64-setup.exe`（NSIS 版，推荐）或 MSI 版，双击安装后从开始菜单 / 桌面快捷方式启动。
 
 ### 2. 账号管理
 
@@ -73,3 +75,14 @@ npm run tauri build
 | 客户端 | 账号切换 | 会话解密 | 会话导入 | 会话删除 |
 | --- | --- | --- | --- | --- |
 | Trae（国内版） | ✅ | ✅ | ✅ | ✅ |
+
+## 致谢
+
+本项目受以下开源项目启发与支持：
+
+- [changexbc/workbuddy-switch](https://github.com/changexbc/workbuddy-switch) —— 多账号切换 + 记录保留思路的源头，账号载体合成与切换流程参考于此
+- [yiyiqd/trae-session-export](https://github.com/yiyiqd/trae-session-export) —— Trae 本地会话库解密方案的参考实现
+
+## 许可协议
+
+[MIT License](LICENSE)（Copyright © 2026 trae-switch-cn）
