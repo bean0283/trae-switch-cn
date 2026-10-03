@@ -143,9 +143,15 @@ pub fn list_processes(client: &TraeClient) -> Vec<(String, u32)> {
     let mut result = Vec::new();
     #[cfg(windows)]
     for name in &names {
+        // 镜像名含空格（如 TRAE SOLO CN.exe）时值必须加双引号，否则 tasklist 过滤失败
+        let img = if name.contains(' ') {
+            format!("\"{name}.exe\"")
+        } else {
+            format!("{name}.exe")
+        };
         let args = vec![
             "/FI".to_string(),
-            format!("IMAGENAME eq {name}.exe"),
+            format!("IMAGENAME eq {img}"),
             "/FO".to_string(),
             "CSV".to_string(),
             "/NH".to_string(),
@@ -203,9 +209,15 @@ pub fn kill_all(client: &TraeClient) -> Vec<String> {
     for name in &names {
         #[cfg(windows)]
         {
+            // 镜像名含空格（如 TRAE SOLO CN.exe）时 /IM 值必须加双引号，否则 taskkill 参数错乱杀不掉
+            let img = if name.contains(' ') {
+                format!("\"{name}\"")
+            } else {
+                name.clone()
+            };
             let args = vec![
                 "/IM".to_string(),
-                name.clone(),
+                img,
                 "/T".to_string(),
                 "/F".to_string(),
             ];

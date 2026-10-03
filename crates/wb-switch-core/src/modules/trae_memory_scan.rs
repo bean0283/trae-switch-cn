@@ -119,7 +119,12 @@ fn find_client_process(client_key: &str) -> Option<(u32, u64)> {
     let names = process_names_for_client(client_key);
     let mut pids: Vec<(u32, u64)> = Vec::new();
     for name in names {
-        let filter = format!("IMAGENAME eq {name}");
+        // 镜像名含空格（如 TRAE SOLO CN.exe）时值必须加双引号，否则 tasklist 过滤失败
+        let filter = if name.contains(' ') {
+            format!("IMAGENAME eq \"{name}\"")
+        } else {
+            format!("IMAGENAME eq {name}")
+        };
         if let Some(out) = run_tasklist(&["/FI", &filter, "/FO", "CSV", "/NH"]) {
             for line in out.lines() {
                 let line = line.trim().trim_matches('\0');
