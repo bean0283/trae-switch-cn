@@ -119,12 +119,9 @@ fn find_client_process(client_key: &str) -> Option<(u32, u64)> {
     let names = process_names_for_client(client_key);
     let mut pids: Vec<(u32, u64)> = Vec::new();
     for name in names {
-        // 镜像名含空格（如 TRAE SOLO CN.exe）时值必须加双引号，否则 tasklist 过滤失败
-        let filter = if name.contains(' ') {
-            format!("IMAGENAME eq \"{name}\"")
-        } else {
-            format!("IMAGENAME eq {name}")
-        };
+        // tasklist 的 /FI 值含空格时不能加引号（实测加引号报 Invalid argument），
+        // 不加引号反而能正确匹配 TRAE SOLO CN.exe 这类镜像名。
+        let filter = format!("IMAGENAME eq {name}");
         if let Some(out) = run_tasklist(&["/FI", &filter, "/FO", "CSV", "/NH"]) {
             for line in out.lines() {
                 let line = line.trim().trim_matches('\0');

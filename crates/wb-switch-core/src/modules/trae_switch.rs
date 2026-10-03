@@ -143,15 +143,11 @@ pub fn list_processes(client: &TraeClient) -> Vec<(String, u32)> {
     let mut result = Vec::new();
     #[cfg(windows)]
     for name in &names {
-        // 镜像名含空格（如 TRAE SOLO CN.exe）时值必须加双引号，否则 tasklist 过滤失败
-        let img = if name.contains(' ') {
-            format!("\"{name}.exe\"")
-        } else {
-            format!("{name}.exe")
-        };
+        // tasklist 的 /FI 值含空格时不能加引号（实测加引号报 Invalid argument），
+        // 不加引号反而能正确匹配 TRAE SOLO CN.exe 这类镜像名。
         let args = vec![
             "/FI".to_string(),
-            format!("IMAGENAME eq {img}"),
+            format!("IMAGENAME eq {name}.exe"),
             "/FO".to_string(),
             "CSV".to_string(),
             "/NH".to_string(),
@@ -203,30 +199,25 @@ pub fn is_running(client: &TraeClient) -> bool {
 
 /// 结束该客户端的全部进程（含子进程）。返回被结束的进程名列表。
 pub fn kill_all(client: &TraeClient) -> Vec<String> {
-    let mut names: Vec<String> = list_processes(client).iter().map(|(n, _)| n.clone()).collect();
+    let procs = list_processes(client);
+    let mut names: Vec<String> = procs.iter().map(|(n, _)| n.clone()).collect();
     names.sort();
     names.dedup();
+    #[cfg(windows)]
+    for (_name, pid) in procs {
+        // 用 /PID 杀，绕开镜像名含空格（TRAE SOLO CN.exe）时 /IM 值在命令行
+        // 解析中的错乱问题；/T 连带子进程树，/F 强制。
+        let args = vec![
+            "/PID".to_string(),
+            pid.to_string(),
+            "/T".to_string(),
+            "/F".to_string(),
+        ];
+        let _ = run_cmd("taskkill", &args, Duration::from_secs(20));
+    }
+    #[cfg(not(windows))]
     for name in &names {
-        #[cfg(windows)]
-        {
-            // 镜像名含空格（如 TRAE SOLO CN.exe）时 /IM 值必须加双引号，否则 taskkill 参数错乱杀不掉
-            let img = if name.contains(' ') {
-                format!("\"{name}\"")
-            } else {
-                name.clone()
-            };
-            let args = vec![
-                "/IM".to_string(),
-                img,
-                "/T".to_string(),
-                "/F".to_string(),
-            ];
-            let _ = run_cmd("taskkill", &args, Duration::from_secs(20));
-        }
-        #[cfg(not(windows))]
-        {
-            let _ = run_cmd("pkill", &["-9".to_string(), "-f".to_string(), name.clone()], Duration::from_secs(20));
-        }
+        let _ = run_cmd("pkill", &["-9".to_string(), "-f".to_string(), name.clone()], Duration::from_secs(20));
     }
     names
 }
