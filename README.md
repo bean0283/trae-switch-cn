@@ -33,7 +33,9 @@ Trae（国内版）多账号切换桌面 App（Tauri 2 + React + Rust）。面�
 - **账号切换**：在账号卡片上点击「切换」，应用会终止 Trae 进程 → 还原目标账号载体 → 重启客户端，期间显示实时进度；切换失败自动回滚到原账号；
 - **账号维护**：支持备份 / 导出 / 导入 / 重命名 / 删除账号。
 
-> 截图：Trae 账号管理页（待补充）
+> 截图：Trae 账号管理页
+>
+> ![Trae 账号管理页](docs/screenshots/account-manage.png)
 
 ### 3. 会话记录
 
@@ -44,7 +46,9 @@ Trae（国内版）多账号切换桌面 App（Tauri 2 + React + Rust）。面�
 3. **导入**：把其它账号 / 客户端的已解密会话导入到目标账号（同库复制，云端归属目标账号）；
 4. **删除**：勾选会话后彻底删除——先备份整库，再对实时加密库删行并加密回写，原库备份保留在 `~/.trae-switch-cn/backup/`，删除的会话归档到 `~/.trae-switch-cn/deleted_sessions/`。
 
-> 截图：Trae 会话记录页（待补充）
+> 截图：Trae 会话记录页
+>
+> ![Trae 会话记录页](docs/screenshots/session-records.png)
 
 > 提示：Trae 重启后本地密钥可能变化，重新解密前请再次「扫描密钥并解密」。
 
