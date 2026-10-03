@@ -86,6 +86,41 @@ pub fn uid_of_account(client_key: &str, id: &str) -> Option<String> {
     None
 }
 
+/// 账号真实显示名：优先 oauth.json 的 displayName / userName，
+/// 其次从载体 storage.json 解密登录态取 account.username（本地备份账号也能显示真实用户名）。
+/// 取不到返回 None（前端回退到账号 id）。
+pub fn display_name(client_key: &str, id: &str) -> Option<String> {
+    let dir = account_dir(client_key, id);
+    let oauth = dir.join("oauth.json");
+    if let Ok(text) = std::fs::read_to_string(&oauth) {
+        if let Ok(v) = serde_json::from_str::<Value>(&text) {
+            for k in ["displayName", "userName"] {
+                if let Some(s) = v
+                    .get(k)
+                    .and_then(|x| x.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                {
+                    return Some(s.to_string());
+                }
+            }
+        }
+    }
+    let storage_text = std::fs::read_to_string(dir.join(REL_STORAGE)).ok()?;
+    let root: Value = serde_json::from_str(&storage_text).ok()?;
+    let raw = root.get(KEY_AUTH)?.as_str()?;
+    if !crate::modules::trae_km::is_km_value(raw) {
+        return None;
+    }
+    let auth = crate::modules::trae_km::decrypt_km_json(raw)?;
+    auth.get("account")?
+        .get("username")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+}
+
 /// 列出某客户端下已有的账号目录。
 pub fn list_vault_accounts(client_key: &str) -> Vec<String> {
     let dir = vault_root().join(client_key);

@@ -756,7 +756,7 @@ export default function TraeSwitchPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="truncate font-medium">
-                              {isOauth && oa?.displayName ? oa.displayName : entry.id}
+                              {entry.displayName || (isOauth && oa?.displayName ? oa.displayName : null) || entry.id}
                             </span>
                             {isOauth ? <Badge variant="outline">网页凭证</Badge> : null}
                             {isLive ? <Badge className="bg-emerald-500/15 text-emerald-600">当前</Badge> : null}

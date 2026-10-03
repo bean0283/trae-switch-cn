@@ -1,6 +1,6 @@
 [package]
 name = "wb-switch-core"
-version = "0.1.72"
+version = "0.0.2"
 edition = "2021"
 description = "trae-switch-cn 核心逻辑（账号/切换/会话/解密/导入），不依赖 Tauri，可被桌面端与 CLI 复用"
 

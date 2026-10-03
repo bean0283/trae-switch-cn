@@ -61,6 +61,8 @@ export interface TraeVaultEntry {
   kind?: "carrier" | "oauth";
   /** kind=oauth 时的凭证详情。 */
   oauth?: TraeOAuthAccount | null;
+  /** 自动获取的真实账号名（oauth displayName / 载体 storage.json username）。 */
+  displayName?: string | null;
 }
 
 export interface TraeLiveAccount {

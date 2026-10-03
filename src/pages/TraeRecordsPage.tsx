@@ -65,6 +65,7 @@ export default function TraeRecordsPage() {
   const [importTarget, setImportTarget] = useState<TraeSessionInfo | null>(null);
   const [importCandidates, setImportCandidates] = useState<TraeImportCandidate[]>([]);
   const [importHints, setImportHints] = useState<string[]>([]);
+  const [importDstClient, setImportDstClient] = useState<string | null>(null);
   const [importDst, setImportDst] = useState<string | null>(null);
   const [importUid, setImportUid] = useState<string | null>(null);
   const [importInspect, setImportInspect] = useState<TraeImportInspect | null>(null);
@@ -84,6 +85,7 @@ export default function TraeRecordsPage() {
 
   async function openImport(s: TraeSessionInfo) {
     if (!clientKey) return;
+    setImportDstClient(clientKey);
     setImportDst(null);
     setImportUid(null);
     setImportInspect(null);
@@ -665,6 +667,7 @@ export default function TraeRecordsPage() {
         onOpenChange={(v) => {
           if (!v && !importBusy) {
             setImportTarget(null);
+            setImportDstClient(null);
             setImportDst(null);
             setImportInspect(null);
             setImportReport(null);
@@ -690,42 +693,89 @@ export default function TraeRecordsPage() {
             </p>
           ) : (
             <div className="space-y-3 text-sm">
-              <div>
-                <div className="mb-1 text-xs text-muted-foreground">选择目标账号</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {importCandidates.map((c) => {
-                    const key = `${c.client_key}::${c.account_id}`;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        disabled={importBusy}
-                        onClick={() => void inspectDst(c)}
-                        title={
-                          c.is_source
-                            ? "导入到原账号 = 同库复制一份（生成新 id），原记录保留"
-                            : undefined
-                        }
-                        className={cn(
-                          "rounded-lg border px-2.5 py-1.5 transition-colors",
-                          importDst === key
-                            ? "border-foreground/20 bg-foreground/[0.06] font-medium"
-                            : "border-border hover:bg-foreground/[0.03]",
-                          !c.db_exists && "opacity-60",
-                        )}
-                      >
-                        <span className="block">{c.label}</span>
-                        <span className="block text-[11px] text-muted-foreground">
-                          {c.client_label}
-                          {c.is_current ? " · 当前登录" : ""}
-                          {c.is_source ? " · 原账号（同库复制）" : ""}
-                          {!c.db_exists ? " · 未登录过" : ""}
-                        </span>
-                      </button>
-                    );
-                  })}
+              {/* 目标客户端维度：仅展示所选客户端下的账号 */}
+              {clients.length > 0 ? (
+                <div>
+                  <div className="mb-1 text-xs text-muted-foreground">目标客户端</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {clients
+                      .filter((c) => c.installed)
+                      .map((c) => {
+                        const active = c.key === importDstClient;
+                        return (
+                          <button
+                            key={c.key}
+                            type="button"
+                            disabled={importBusy}
+                            onClick={() => {
+                              setImportDstClient(c.key);
+                              setImportDst(null);
+                              setImportInspect(null);
+                              setImportReport(null);
+                            }}
+                            className={cn(
+                              "rounded-lg border px-2.5 py-1.5 transition-colors",
+                              active
+                                ? "border-foreground/20 bg-foreground/[0.06] font-medium"
+                                : "border-border hover:bg-foreground/[0.03]",
+                            )}
+                          >
+                            {c.label}
+                          </button>
+                        );
+                      })}
+                  </div>
                 </div>
-              </div>
+              ) : null}
+
+              {(() => {
+                const shown = importCandidates.filter((c) => c.client_key === importDstClient);
+                if (shown.length === 0) {
+                  return (
+                    <p className="text-sm text-muted-foreground">
+                      该客户端下没有可导入账号（需先在本机登录过或留有解密库）。
+                    </p>
+                  );
+                }
+                return (
+                  <div>
+                    <div className="mb-1 text-xs text-muted-foreground">选择目标账号</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {shown.map((c) => {
+                        const key = `${c.client_key}::${c.account_id}`;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            disabled={importBusy}
+                            onClick={() => void inspectDst(c)}
+                            title={
+                              c.is_source
+                                ? "导入到原账号 = 同库复制一份（生成新 id），原记录保留"
+                                : undefined
+                            }
+                            className={cn(
+                              "rounded-lg border px-2.5 py-1.5 transition-colors",
+                              importDst === key
+                                ? "border-foreground/20 bg-foreground/[0.06] font-medium"
+                                : "border-border hover:bg-foreground/[0.03]",
+                              !c.db_exists && "opacity-60",
+                            )}
+                          >
+                            <span className="block">{c.label}</span>
+                            <span className="block text-[11px] text-muted-foreground">
+                              {c.client_label}
+                              {c.is_current ? " · 当前登录" : ""}
+                              {c.is_source ? " · 原账号（同库复制）" : ""}
+                              {!c.db_exists ? " · 未登录过" : ""}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {importHints.length > 0 ? (
                 <div className="space-y-1 rounded-lg bg-amber-500/10 p-3 text-xs leading-5 text-amber-700">

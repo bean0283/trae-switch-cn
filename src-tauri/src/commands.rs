@@ -130,7 +130,7 @@ pub async fn trae_account_overview(client_key: String) -> Result<Value, String> 
                 } else {
                     None
                 };
-                json!({ "id": id, "meta": meta, "kind": kind, "oauth": oauth })
+                json!({ "id": id, "meta": meta, "kind": kind, "oauth": oauth, "displayName": trae_vault::display_name(&client_key, id) })
             })
             .collect();
         Ok(json!({

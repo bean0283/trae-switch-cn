@@ -521,6 +521,218 @@ fn copy_session(
             }
         }
     }
+
+    // session_project：会话-工程关联，客户端据此恢复会话的工程上下文（缺行会导致
+    // 打开会话后无法继续对话）。同库复制时 session_id 改写为新会话。
+    {
+        let table = "session_project";
+        let cols = common_cols(&table_columns(src, table)?, &table_columns(dst, table)?);
+        if !cols.is_empty() {
+            let col_list = cols
+                .iter()
+                .map(|c| format!("\"{c}\""))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let mut stmt = src
+                .prepare(&format!("SELECT {col_list} FROM {table} WHERE session_id=?"))
+                .map_err(|e| format!("源表 {table} 查询失败: {e}"))?;
+            let rows: Vec<Vec<rusqlite::types::Value>> = stmt
+                .query_map(params![sid], |row| {
+                    let mut vals = Vec::new();
+                    for i in 0..cols.len() {
+                        vals.push(row.get::<_, rusqlite::types::Value>(i)?);
+                    }
+                    Ok(vals)
+                })
+                .map_err(|e| format!("源表 {table} 读取失败: {e}"))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| format!("源表 {table} 行读取失败: {e}"))?;
+            if !rows.is_empty() {
+                let sid_idx = cols
+                    .iter()
+                    .position(|c| *c == "session_id")
+                    .ok_or_else(|| format!("{table} 缺 session_id 列"))?;
+                let mut out: Vec<Vec<rusqlite::types::Value>> = Vec::new();
+                for mut vals in rows {
+                    if same_db {
+                        vals[sid_idx] = rusqlite::types::Value::Text(out_sid.clone());
+                    }
+                    out.push(vals);
+                }
+                let placeholders = (0..cols.len()).map(|_| "?").collect::<Vec<_>>().join(", ");
+                let mut ins = dst
+                    .prepare(&format!("INSERT INTO {table} ({col_list}) VALUES ({placeholders})"))
+                    .map_err(|e| format!("目标表 {table} 插入准备失败: {e}"))?;
+                for vals in &out {
+                    let args: Vec<&dyn rusqlite::types::ToSql> = vals
+                        .iter()
+                        .map(|v| v as &dyn rusqlite::types::ToSql)
+                        .collect();
+                    ins.execute(rusqlite::params_from_iter(args))
+                        .map_err(|e| format!("目标表 {table} 插入失败: {e}"))?;
+                }
+                n += out.len();
+            }
+        }
+    }
+
+    // chat_turn：对话轮次（继续对话的语义结构）。同库复制时重生成 turn_id，
+    // 消息引用（reply/response）经 mid_map 改写，并回写 chat_session.last_unread_turn_id。
+    {
+        let table = "chat_turn";
+        let cols = common_cols(&table_columns(src, table)?, &table_columns(dst, table)?);
+        if !cols.is_empty() {
+            let col_list = cols
+                .iter()
+                .map(|c| format!("\"{c}\""))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let mut stmt = src
+                .prepare(&format!("SELECT {col_list} FROM {table} WHERE session_id=?"))
+                .map_err(|e| format!("源表 {table} 查询失败: {e}"))?;
+            let rows: Vec<Vec<rusqlite::types::Value>> = stmt
+                .query_map(params![sid], |row| {
+                    let mut vals = Vec::new();
+                    for i in 0..cols.len() {
+                        vals.push(row.get::<_, rusqlite::types::Value>(i)?);
+                    }
+                    Ok(vals)
+                })
+                .map_err(|e| format!("源表 {table} 读取失败: {e}"))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| format!("源表 {table} 行读取失败: {e}"))?;
+            if !rows.is_empty() {
+                let sid_idx = cols
+                    .iter()
+                    .position(|c| *c == "session_id")
+                    .ok_or_else(|| format!("{table} 缺 session_id 列"))?;
+                let tid_idx = cols
+                    .iter()
+                    .position(|c| *c == "turn_id")
+                    .ok_or_else(|| format!("{table} 缺 turn_id 列"))?;
+                let mut turn_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+                let mut out: Vec<Vec<rusqlite::types::Value>> = Vec::new();
+                for mut vals in rows {
+                    if same_db {
+                        let old_tid = match &vals[tid_idx] {
+                            rusqlite::types::Value::Text(t) => t.clone(),
+                            _ => String::new(),
+                        };
+                        let new_tid = native_hex_id();
+                        turn_map.insert(old_tid, new_tid.clone());
+                        vals[tid_idx] = rusqlite::types::Value::Text(new_tid);
+                        vals[sid_idx] = rusqlite::types::Value::Text(out_sid.clone());
+                        for c in ["reply_to_message_id", "response_message_id"] {
+                            if let Some(ri) = cols.iter().position(|x| *x == c) {
+                                if let rusqlite::types::Value::Text(rep) = &vals[ri] {
+                                    if let Some(nm) = mid_map.get(rep) {
+                                        vals[ri] = rusqlite::types::Value::Text(nm.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    out.push(vals);
+                }
+                let placeholders = (0..cols.len()).map(|_| "?").collect::<Vec<_>>().join(", ");
+                let mut ins = dst
+                    .prepare(&format!("INSERT INTO {table} ({col_list}) VALUES ({placeholders})"))
+                    .map_err(|e| format!("目标表 {table} 插入准备失败: {e}"))?;
+                for vals in &out {
+                    let args: Vec<&dyn rusqlite::types::ToSql> = vals
+                        .iter()
+                        .map(|v| v as &dyn rusqlite::types::ToSql)
+                        .collect();
+                    ins.execute(rusqlite::params_from_iter(args))
+                        .map_err(|e| format!("目标表 {table} 插入失败: {e}"))?;
+                }
+                n += out.len();
+                if !turn_map.is_empty() {
+                    let mut up = dst
+                        .prepare("UPDATE chat_session SET last_unread_turn_id=? WHERE session_id=? AND last_unread_turn_id=?")
+                        .map_err(|e| format!("回写 last_unread_turn_id 准备失败: {e}"))?;
+                    for (old_tid, new_tid) in &turn_map {
+                        up.execute(params![new_tid, out_sid, old_tid])
+                            .map_err(|e| format!("回写 last_unread_turn_id 失败: {e}"))?;
+                    }
+                }
+            }
+        }
+    }
+
+    // agent_run：agent 执行记录。同库复制时重生成唯一键 agent_run_id，
+    // 会话内 parent_run_id 同步映射，否则父子关系指向源会话的运行。
+    {
+        let table = "agent_run";
+        let cols = common_cols(&table_columns(src, table)?, &table_columns(dst, table)?);
+        if !cols.is_empty() {
+            let col_list = cols
+                .iter()
+                .map(|c| format!("\"{c}\""))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let mut stmt = src
+                .prepare(&format!("SELECT {col_list} FROM {table} WHERE session_id=?"))
+                .map_err(|e| format!("源表 {table} 查询失败: {e}"))?;
+            let rows: Vec<Vec<rusqlite::types::Value>> = stmt
+                .query_map(params![sid], |row| {
+                    let mut vals = Vec::new();
+                    for i in 0..cols.len() {
+                        vals.push(row.get::<_, rusqlite::types::Value>(i)?);
+                    }
+                    Ok(vals)
+                })
+                .map_err(|e| format!("源表 {table} 读取失败: {e}"))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| format!("源表 {table} 行读取失败: {e}"))?;
+            if !rows.is_empty() {
+                let sid_idx = cols
+                    .iter()
+                    .position(|c| *c == "session_id")
+                    .ok_or_else(|| format!("{table} 缺 session_id 列"))?;
+                let rid_idx = cols
+                    .iter()
+                    .position(|c| *c == "agent_run_id")
+                    .ok_or_else(|| format!("{table} 缺 agent_run_id 列"))?;
+                let parent_idx = cols.iter().position(|c| *c == "parent_run_id");
+                let mut run_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+                let mut out: Vec<Vec<rusqlite::types::Value>> = Vec::new();
+                for mut vals in rows {
+                    if same_db {
+                        let old_rid = match &vals[rid_idx] {
+                            rusqlite::types::Value::Text(t) => t.clone(),
+                            _ => String::new(),
+                        };
+                        let new_rid = native_hex_id();
+                        run_map.insert(old_rid, new_rid.clone());
+                        vals[rid_idx] = rusqlite::types::Value::Text(new_rid);
+                        vals[sid_idx] = rusqlite::types::Value::Text(out_sid.clone());
+                        if let Some(pi) = parent_idx {
+                            if let rusqlite::types::Value::Text(p) = &vals[pi] {
+                                if let Some(np) = run_map.get(p) {
+                                    vals[pi] = rusqlite::types::Value::Text(np.clone());
+                                }
+                            }
+                        }
+                    }
+                    out.push(vals);
+                }
+                let placeholders = (0..cols.len()).map(|_| "?").collect::<Vec<_>>().join(", ");
+                let mut ins = dst
+                    .prepare(&format!("INSERT INTO {table} ({col_list}) VALUES ({placeholders})"))
+                    .map_err(|e| format!("目标表 {table} 插入准备失败: {e}"))?;
+                for vals in &out {
+                    let args: Vec<&dyn rusqlite::types::ToSql> = vals
+                        .iter()
+                        .map(|v| v as &dyn rusqlite::types::ToSql)
+                        .collect();
+                    ins.execute(rusqlite::params_from_iter(args))
+                        .map_err(|e| format!("目标表 {table} 插入失败: {e}"))?;
+                }
+                n += out.len();
+            }
+        }
+    }
     if let Some(cb) = on_log {
         cb(&format!("会话 {sid}：已复制 {n} 行{}", if same_db { "（新 id）" } else { "" }));
     }
